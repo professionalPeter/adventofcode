@@ -14,13 +14,13 @@ def calc_total_fuel_requirement(mass):
 def part1():
     """Output the answer for part 1"""
     x = 0
-    with open('day1input.txt') as fp:
+    with open('day01input.txt') as fp:
         return sum([calc_simple_fuel_requirement(int(mass)) for mass in fp])
 
 def part2():
     """Output the answer for part 2"""
     x = 0
-    with open('day1input.txt') as fp:
+    with open('day01input.txt') as fp:
         return sum([calc_total_fuel_requirement(int(mass)) for mass in fp])
 
 print(f'Part 1 answer: {part1()}')

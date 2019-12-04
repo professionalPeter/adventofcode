@@ -9,7 +9,7 @@ from intcode import IntCodeProcessor
 
 def load_program():
     """Load the puzzle input and split it into a list of ints"""
-    with open('day2input.txt') as file:
+    with open('day02input.txt') as file:
         return [int(x) for x in file.read().rstrip().split(',')]
 
 def part1():
