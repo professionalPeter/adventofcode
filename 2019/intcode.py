@@ -1,9 +1,8 @@
 'An Int Code program processor'
-from enum import IntEnum
+from enum import IntEnum, Enum, auto
 import logging
 
-logger = logging.getLogger('com.pgl.advent_of_code')
-logger.addHandler(logging.StreamHandler())
+logger = logging.getLogger()
 #logger.setLevel(logging.DEBUG)
 
 class OpCode(IntEnum):
@@ -17,6 +16,14 @@ class OpCode(IntEnum):
     LESS_THAN = 7
     EQUALS = 8
     HALT = 99
+
+class ExecutionError(Exception):
+    def __init__(self, code):
+        self.reason = code
+
+class ExecutionCode(Enum):
+    'Reasons for execution halting'
+    NEED_INPUT = auto()
 
 class ParameterMode(IntEnum):
     POSITION = 0
@@ -49,11 +56,16 @@ class IntCodeProcessor:
         self._initial_state = [int(value) for value in initial_state]
         self._memory = None
         self._instruction_pointer = None
+        self._reset_execution()
 
     def _load_program(self, path):
         with open(path) as fp:
             return [x for x in fp.read().rstrip().split(',')]
 
+    def _reset_execution(self):
+        self._memory = self._initial_state.copy() 
+        self._instruction_pointer = 0
+    
     def execute_program_with_inputs(self, noun, verb):
         'Execute the program for the given memory state, noun, and verb'
         self._memory = self._initial_state.copy()
@@ -67,19 +79,35 @@ class IntCodeProcessor:
             self._execute_instruction()
         return self._memory[0]
 
-    def execute_program(self, input_channel = None):
+    def execute_program(self, input_channel = None, reset = True):
         'Execute the program for the given memory state, noun, and verb'
-        self._memory = self._initial_state.copy()
 
-        self._instruction_pointer = 0
-        self._input_channel = input_channel
+        if reset:
+            self._reset_execution()
+        self._set_input_channel(input_channel)
         self.outputs = []
         while self._memory[self._instruction_pointer] != OpCode.HALT:
-            result = self._execute_instruction()
-            if result is not None:
-                self.outputs.append(result)
-                logger.debug(f'Output: {self.outputs}')
+            saved_instruction_pointer = self._instruction_pointer
+            try:
+                result = self._execute_instruction()
+                if result is not None:
+                    self.outputs.append(result)
+                    logger.debug(f'Output: {self.outputs}')
+            except ExecutionError as err:
+                self._instruction_pointer = saved_instruction_pointer
+                raise err
+        logger.debug('HALT')
         return self.outputs
+
+    def _set_input_channel(self, input_channel):
+        """Sets the processors input channel ti the given input channel
+
+        This method accepts for both ints and lists of ints
+        """
+        try:
+            self._input_channel = iter(input_channel)
+        except TypeError:
+            self._input_channel = iter([input_channel])
 
     def _execute_instruction(self):
         ip = self._instruction_pointer
@@ -95,36 +123,47 @@ class IntCodeProcessor:
         elif command.opcode == OpCode.SAVE_INPUT:
             self._write(self._read_input_channel())
         elif command.opcode == OpCode.OUTPUT:
-            return self._read(command.parameter_mode(0))
+            result = self._read(command.parameter_mode(0))
+            logger.debug(f'OUTPUT: {result}')
+            return result
         elif command.opcode == OpCode.JMP_IF_TRUE:
             test_value = self._read(command.parameter_mode(0))
             jump_position = self._read(command.parameter_mode(1))
+            logger.debug(f'JUMP IF TRUE value: {test_value}')
             if test_value != 0:
                 self._instruction_pointer = jump_position
         elif command.opcode == OpCode.JMP_IF_FALSE:
             test_value = self._read(command.parameter_mode(0))
             jump_position = self._read(command.parameter_mode(1))
+            logger.debug(f'JUMP IF FALSE value: {test_value}')
             if test_value == 0:
                 self._instruction_pointer = jump_position
         elif command.opcode == OpCode.EQUALS:
             value0 = self._read(command.parameter_mode(0))
             value1 = self._read(command.parameter_mode(1))
+            logger.debug(f'EQUALS value0: {value0} value1: {value1}')
             result = 1 if value0 == value1 else 0
             self._write(result)
         elif command.opcode == OpCode.LESS_THAN:
             value0 = self._read(command.parameter_mode(0))
             value1 = self._read(command.parameter_mode(1))
+            logger.debug(f'LESS THAN value0: {value0} value1: {value1}')
             result = 1 if value0 < value1 else 0
             self._write(result)
         else:
             raise ValueError(f'{command.opcode} is not a supported opcode')
 
     def _read_input_channel(self):
-        logger.debug(f'Read from input channel: {self._input_channel}')
-        return self._input_channel
+        try:
+            result = next(self._input_channel)
+            logger.debug(f'READ input: {result}')
+            return result
+        except StopIteration:
+            pass # pass so that StopIteration doesn't show up in the handling of the ExecutionError 
+        raise ExecutionError(ExecutionCode.NEED_INPUT)
 
     def _write(self, value):
-        output_address = self._read(ParameterMode.IMMEDIATE)
+        output_address = self._step()
         self._memory[output_address] = value
         logger.debug(f'WRITE value: {value} position: {output_address}')
 
@@ -139,17 +178,31 @@ class IntCodeProcessor:
         logger.debug(f'READ parameter: {parameter} mode: {mode} value: {result}')
         return result
 
-    def _jump_if(success):
+    def _jump_if(self, success):
         test_value = self._read(command.parameter_mode(0))
         jump_position = self._read(command.parameter_mode(1))
         test_pass = test_value == 0
-        if test_pass AND success:
+        if test_pass and success:
             self._instruction_pointer = jump_position
 
 
 if __name__ == '__main__':
     #TODO Turn these into real unit tests!
-    print(f'Input/Output test: {IntCodeProcessor([3,0,4,0,99]).execute_program(22) == [22]}')
+    print(f'Input/Output test - single int: {IntCodeProcessor([3,0,4,0,99]).execute_program(22) == [22]}')
+    print(f'Input/Output test - list: {IntCodeProcessor([3,0,4,0,3,0,4,0,99]).execute_program([1001, 1002]) == [1001, 1002]}')
+    try:
+        IntCodeProcessor([3,0,3,0,4,0,99]).execute_program([1001])
+    except ExecutionError as err:
+        result = err
+    print(f'Input/Output test - underflow: { result.reason == ExecutionCode.NEED_INPUT }')
+
+    processor = IntCodeProcessor([3,0,3,0,4,0,99])
+    try:
+        processor.execute_program([1001])
+    except ExecutionError as err:
+        result = processor.execute_program([1002], reset = False)
+    print(f'Input/Output test - resume execution: { result == [1002] }')
+    print(f'execute_program test - executes when reset == false on first call: {IntCodeProcessor([3,0,4,0,99]).execute_program(22, reset = False) == [22]}')
     processor = IntCodeProcessor([1101,100,-1,4,0])
     processor.execute_program()
     print(f'Negative parameter test: {processor._memory[4] == 99}')
@@ -186,4 +239,7 @@ if __name__ == '__main__':
 Future polish:
 Combine handlers of similar opcodes
 Get rid of the noun, verb executer and move it back to day02
+Make HALT handled inside execute_instruction
+Create a clear output, or cleaner way of connecting one to another
+Make logging consistent and clean (maybe get rid of the reads and writes or demote them?)
 """
