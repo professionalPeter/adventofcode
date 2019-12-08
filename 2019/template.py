@@ -25,5 +25,5 @@ def part2_test_input():
     return """"""
 
 if __name__ == '__main__':
-    part1()
-    part2()
+    part1(part1_test_input())
+    part2(part2_test_input())

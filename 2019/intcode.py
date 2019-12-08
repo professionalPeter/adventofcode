@@ -242,4 +242,5 @@ Get rid of the noun, verb executer and move it back to day02
 Make HALT handled inside execute_instruction
 Create a clear output, or cleaner way of connecting one to another
 Make logging consistent and clean (maybe get rid of the reads and writes or demote them?)
+MAke a better decision on where NEED_INPUT should be raised
 """
