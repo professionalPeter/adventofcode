@@ -48,18 +48,14 @@ def generate_thruster_signal_part2(program, phase_settings):
     while True:
         try:
             logging.debug(f'CPU {cpu_index} - start')
-            result = cpus[cpu_index].execute_program(next_input, False)
-            if result is not None:
-                if cpu_index == 4:
-                    break
-                else:
-                    next_input = cpus[cpu_index].outputs
-                    cpus[cpu_index].outputs = []
+            if cpus[cpu_index].execute_program(next_input, False) is not None and cpu_index == 4:
+                break
         except ExecutionError:
-            next_input = cpus[cpu_index].outputs
-            cpus[cpu_index].outputs = []
+            pass
+        next_input = cpus[cpu_index].outputs
+        cpus[cpu_index].outputs = []
         cpu_index = (cpu_index+1) % 5
-    return result
+    return cpus[-1].outputs
     
 def puzzle_input():
     """Returns the official input for the puzzle"""
