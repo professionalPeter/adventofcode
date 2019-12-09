@@ -15,6 +15,7 @@ class OpCode(IntEnum):
     JMP_IF_FALSE = 6
     LESS_THAN = 7
     EQUALS = 8
+    ADJUST_RELATIVE_BASE = 9
     HALT = 99
 
 class ExecutionError(Exception):
@@ -28,6 +29,7 @@ class ExecutionCode(Enum):
 class ParameterMode(IntEnum):
     POSITION = 0
     IMMEDIATE = 1
+    RELATIVE = 2
 
 class Command:
     'contains the opcode and parameter modes for an instruction'
@@ -37,15 +39,15 @@ class Command:
         command = str(command)
         self.opcode = OpCode(int(command[-2:]))
         self._parameter_modes = [int(mode) for mode in command[-3::-1]]
-        self._validate_paramter_modes()
+        self._validate_paramter_modes(command)
 
     def parameter_mode(self, index):
         return self._parameter_modes[index] if index < len(self._parameter_modes) else ParameterMode.POSITION
 
-    def _validate_paramter_modes(self):
-        invalid_modes = [mode for mode in self._parameter_modes if mode not in set([0,1])]
+    def _validate_paramter_modes(self, command):
+        invalid_modes = [mode for mode in self._parameter_modes if mode not in set(mode.value for mode in ParameterMode)]
         if len(invalid_modes) > 0:
-            raise ValueError(f'Invalid modes {invalid_modes} in opcode {opcode}')
+            raise ValueError(f'Invalid modes {invalid_modes} in command {command}')
 
 class IntCodeProcessor:
     'An Int Code program processor'
@@ -56,6 +58,7 @@ class IntCodeProcessor:
         self._initial_state = [int(value) for value in initial_state]
         self._memory = None
         self._instruction_pointer = None
+        self._relative_base = None
         self._reset_execution()
 
     def _load_program(self, path):
@@ -63,8 +66,11 @@ class IntCodeProcessor:
             return [x for x in fp.read().rstrip().split(',')]
 
     def _reset_execution(self):
-        self._memory = self._initial_state.copy() 
+        self._memory = [0] * 10_000
+        for index, value in enumerate(self._initial_state):
+            self._memory[index] = value
         self._instruction_pointer = 0
+        self._relative_base = 0
     
     def execute_program_with_inputs(self, noun, verb):
         'Execute the program for the given memory state, noun, and verb'
@@ -116,12 +122,12 @@ class IntCodeProcessor:
 
         if command.opcode == OpCode.ADD:
             inputs = [self._read(command.parameter_mode(index)) for index in range(2)]
-            self._write(sum(inputs))
+            self._write(sum(inputs), command.parameter_mode(2))
         elif command.opcode == OpCode.MULT:
             inputs = [self._read(command.parameter_mode(index)) for index in range(2)]
-            self._write(inputs[0] * inputs[1])
+            self._write(inputs[0] * inputs[1], command.parameter_mode(2))
         elif command.opcode == OpCode.SAVE_INPUT:
-            self._write(self._read_input_channel())
+            self._write(self._read_input_channel(), command.parameter_mode(0))
         elif command.opcode == OpCode.OUTPUT:
             result = self._read(command.parameter_mode(0))
             logger.debug(f'OUTPUT: {result}')
@@ -129,13 +135,13 @@ class IntCodeProcessor:
         elif command.opcode == OpCode.JMP_IF_TRUE:
             test_value = self._read(command.parameter_mode(0))
             jump_position = self._read(command.parameter_mode(1))
-            logger.debug(f'JUMP IF TRUE value: {test_value}')
+            logger.debug(f'JUMP IF TRUE value: {test_value} target: {jump_position}')
             if test_value != 0:
                 self._instruction_pointer = jump_position
         elif command.opcode == OpCode.JMP_IF_FALSE:
             test_value = self._read(command.parameter_mode(0))
             jump_position = self._read(command.parameter_mode(1))
-            logger.debug(f'JUMP IF FALSE value: {test_value}')
+            logger.debug(f'JUMP IF FALSE value: {test_value} target: {jump_position}')
             if test_value == 0:
                 self._instruction_pointer = jump_position
         elif command.opcode == OpCode.EQUALS:
@@ -143,13 +149,17 @@ class IntCodeProcessor:
             value1 = self._read(command.parameter_mode(1))
             logger.debug(f'EQUALS value0: {value0} value1: {value1}')
             result = 1 if value0 == value1 else 0
-            self._write(result)
+            self._write(result, command.parameter_mode(2))
         elif command.opcode == OpCode.LESS_THAN:
             value0 = self._read(command.parameter_mode(0))
             value1 = self._read(command.parameter_mode(1))
             logger.debug(f'LESS THAN value0: {value0} value1: {value1}')
             result = 1 if value0 < value1 else 0
-            self._write(result)
+            self._write(result, command.parameter_mode(2))
+        elif command.opcode == OpCode.ADJUST_RELATIVE_BASE:
+            offset = self._read(command.parameter_mode(0))
+            self._relative_base += offset
+            logger.debug(f'RELATIVE BASE offset: {offset} new base: {self._relative_base}')
         else:
             raise ValueError(f'{command.opcode} is not a supported opcode')
 
@@ -162,19 +172,26 @@ class IntCodeProcessor:
             pass # pass so that StopIteration doesn't show up in the handling of the ExecutionError 
         raise ExecutionError(ExecutionCode.NEED_INPUT)
 
-    def _write(self, value):
-        output_address = self._step()
+    def _write(self, value, mode):
+        base = self._relative_base if mode == ParameterMode.RELATIVE else 0
+        offset = self._step()
+        output_address = base + offset
+        
         self._memory[output_address] = value
-        logger.debug(f'WRITE value: {value} position: {output_address}')
+        logger.debug(f'WRITE value: {value} base: {base} offset: {offset} position: {output_address}')
 
     def _step(self):
         value = self._memory[self._instruction_pointer]
         self._instruction_pointer += 1
         return value
 
-    def _read(self, mode = ParameterMode.POSITION):
+    def _read(self, mode):
         parameter = self._step()
-        result = parameter if mode == ParameterMode.IMMEDIATE else self._memory[parameter]
+        if mode == ParameterMode.IMMEDIATE:
+            result = parameter
+        else:
+            base = self._relative_base if mode == ParameterMode.RELATIVE else 0
+            result = self._memory[base + parameter]
         logger.debug(f'READ parameter: {parameter} mode: {mode} value: {result}')
         return result
 
@@ -195,6 +212,8 @@ if __name__ == '__main__':
     except ExecutionError as err:
         result = err
     print(f'Input/Output test - underflow: { result.reason == ExecutionCode.NEED_INPUT }')
+    print(f'Input test - relative mode: {IntCodeProcessor([109,1000,203,0,4,1000,99]).execute_program(22) == [22]}')
+    print(f'Output test - relative mode: {IntCodeProcessor([109,1000,3,1000,204,0,99]).execute_program(22) == [22]}')
 
     processor = IntCodeProcessor([3,0,3,0,4,0,99])
     try:
@@ -226,6 +245,11 @@ if __name__ == '__main__':
     print(f'Less Than test when less than immediate mode: {processor.execute_program(7) == [1]}')
     print(f'Less Than test when not less than immediate mode: {processor.execute_program(8) == [0]}')
 
+    processor = IntCodeProcessor([109, 3, 2101, 10, 0, 0, 4, 0, 99])
+    print(f'Relative mode test: {processor.execute_program() == [20]}')
+    program = [109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99]
+    processor = IntCodeProcessor(program)
+    print(f'Extended memory test: {processor.execute_program() == program}')
     processor = IntCodeProcessor(path= 'day02input.txt')
     print(f'Day2 Part 1 pass? {processor.execute_program_with_inputs(12, 2) == 6627023}')
     print(f'Repeated execution pass? {processor.execute_program_with_inputs(12, 2) == 6627023}')
@@ -243,4 +267,5 @@ Make HALT handled inside execute_instruction
 Create a clear output, or cleaner way of connecting one to another
 Make logging consistent and clean (maybe get rid of the reads and writes or demote them?)
 MAke a better decision on where NEED_INPUT should be raised
+Consolidate the logic for adding the offset to the relative base
 """
