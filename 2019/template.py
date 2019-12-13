@@ -13,7 +13,7 @@ def part2(inputs = None):
 
 def puzzle_input():
     """Returns the official input for the puzzle"""
-    with open('day0DAYinput.txt') as file:
+    with open('dayDAYinput.txt') as file:
         return file.read()
 
 def part1_test_input():
