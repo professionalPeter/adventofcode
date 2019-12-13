@@ -2,8 +2,9 @@
 from enum import IntEnum, Enum, auto
 import logging
 
-logger = logging.getLogger()
-#logger.setLevel(logging.DEBUG)
+#logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.WARN)
 
 class OpCode(IntEnum):
     'Int Code opcodes'
@@ -61,6 +62,13 @@ class IntCodeProcessor:
         self._relative_base = None
         self._reset_execution()
 
+    def dump_memory(self, start=None, end=None):
+        start = start or self._instruction_pointer
+        end = end or start + 15
+        end = end if end < len(self._memory) else len(self._memory)-1
+        for index, value in enumerate(self._memory[start:end]):
+            print(f'{index+start}: {value}')
+
     def _load_program(self, path):
         with open(path) as fp:
             return [x for x in fp.read().rstrip().split(',')]
@@ -71,6 +79,7 @@ class IntCodeProcessor:
             self._memory[index] = value
         self._instruction_pointer = 0
         self._relative_base = 0
+        self.outputs = []
     
     def execute_program_with_inputs(self, noun, verb):
         'Execute the program for the given memory state, noun, and verb'
@@ -91,18 +100,17 @@ class IntCodeProcessor:
         if reset:
             self._reset_execution()
         self._set_input_channel(input_channel)
-        self.outputs = []
         while self._memory[self._instruction_pointer] != OpCode.HALT:
             saved_instruction_pointer = self._instruction_pointer
             try:
                 result = self._execute_instruction()
                 if result is not None:
                     self.outputs.append(result)
-                    logger.debug(f'Output: {self.outputs}')
+                    logger.info(f'Output: {self.outputs}')
             except ExecutionError as err:
                 self._instruction_pointer = saved_instruction_pointer
                 raise err
-        logger.debug('HALT')
+        logger.info('HALT')
         return self.outputs
 
     def _set_input_channel(self, input_channel):
@@ -110,6 +118,10 @@ class IntCodeProcessor:
 
         This method accepts for both ints and lists of ints
         """
+        if input_channel is None:
+            self._input_channel = iter(list())
+            return
+
         try:
             self._input_channel = iter(input_channel)
         except TypeError:
@@ -118,48 +130,56 @@ class IntCodeProcessor:
     def _execute_instruction(self):
         ip = self._instruction_pointer
         command = Command(self._step())
-        logger.debug(f'{ip}: {command.opcode} {command._parameter_modes}')
+        logger.info(f'{ip}: {command.opcode.name} {command._parameter_modes} ({command.opcode})')
 
         if command.opcode == OpCode.ADD:
             inputs = [self._read(command.parameter_mode(index)) for index in range(2)]
-            self._write(sum(inputs), command.parameter_mode(2))
+            result = sum(inputs)
+            self._write(result, command.parameter_mode(2))
+            logger.info(f'ADD values: ({inputs[0]},{inputs[1]}) result: {result}, target: ')
         elif command.opcode == OpCode.MULT:
             inputs = [self._read(command.parameter_mode(index)) for index in range(2)]
-            self._write(inputs[0] * inputs[1], command.parameter_mode(2))
+            result = inputs[0] * inputs[1]
+            self._write(result, command.parameter_mode(2))
+            logger.info(f'MULT values: ({inputs[0]},{inputs[1]}) result: {result}, target: ')
         elif command.opcode == OpCode.SAVE_INPUT:
-            self._write(self._read_input_channel(), command.parameter_mode(0))
+            result = self._read_input_channel()
+            self._write(result, command.parameter_mode(0))
+            logger.info(f'SAVE_INPUT: {result}')
         elif command.opcode == OpCode.OUTPUT:
             result = self._read(command.parameter_mode(0))
-            logger.debug(f'OUTPUT: {result}')
+            logger.info(f'OUTPUT: {result}')
             return result
         elif command.opcode == OpCode.JMP_IF_TRUE:
             test_value = self._read(command.parameter_mode(0))
             jump_position = self._read(command.parameter_mode(1))
-            logger.debug(f'JUMP IF TRUE value: {test_value} target: {jump_position}')
-            if test_value != 0:
+            result = test_value != 0
+            if result:
                 self._instruction_pointer = jump_position
+            logger.info(f'JUMP IF TRUE value: {test_value} result: {result} target: {jump_position}')
         elif command.opcode == OpCode.JMP_IF_FALSE:
             test_value = self._read(command.parameter_mode(0))
             jump_position = self._read(command.parameter_mode(1))
-            logger.debug(f'JUMP IF FALSE value: {test_value} target: {jump_position}')
-            if test_value == 0:
+            result = test_value == 0
+            if result:
                 self._instruction_pointer = jump_position
+            logger.info(f'JUMP IF FALSE value: {test_value} result: {result} target: {jump_position}')
         elif command.opcode == OpCode.EQUALS:
             value0 = self._read(command.parameter_mode(0))
             value1 = self._read(command.parameter_mode(1))
-            logger.debug(f'EQUALS value0: {value0} value1: {value1}')
             result = 1 if value0 == value1 else 0
             self._write(result, command.parameter_mode(2))
+            logger.info(f'EQUALS value0: {value0} value1: {value1} result: {result} target: ')
         elif command.opcode == OpCode.LESS_THAN:
             value0 = self._read(command.parameter_mode(0))
             value1 = self._read(command.parameter_mode(1))
-            logger.debug(f'LESS THAN value0: {value0} value1: {value1}')
             result = 1 if value0 < value1 else 0
             self._write(result, command.parameter_mode(2))
+            logger.info(f'LESS THAN value0: {value0} value1: {value1} result: {result} target: ')
         elif command.opcode == OpCode.ADJUST_RELATIVE_BASE:
             offset = self._read(command.parameter_mode(0))
             self._relative_base += offset
-            logger.debug(f'RELATIVE BASE offset: {offset} new base: {self._relative_base}')
+            logger.info(f'RELATIVE BASE offset: {offset} new base: {self._relative_base}')
         else:
             raise ValueError(f'{command.opcode} is not a supported opcode')
 
@@ -258,7 +278,6 @@ if __name__ == '__main__':
     processor = IntCodeProcessor(path= 'day05input.txt')
     print(f'Day 5 part 1 pass: {processor.execute_program(1) == [0, 0, 0, 0, 0, 0, 0, 0, 0, 15426686]}')
     print(f'Day 5 part 2 pass: {processor.execute_program(5) == [11430197]}')
-
 """
 Future polish:
 Combine handlers of similar opcodes
@@ -268,4 +287,6 @@ Create a clear output, or cleaner way of connecting one to another
 Make logging consistent and clean (maybe get rid of the reads and writes or demote them?)
 MAke a better decision on where NEED_INPUT should be raised
 Consolidate the logic for adding the offset to the relative base
+Validate that input is all integers
+Fill in target component of info log lines
 """
