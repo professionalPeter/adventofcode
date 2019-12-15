@@ -55,7 +55,7 @@ class IntCodeProcessor:
     def __init__(self, initial_state = [], path = None):
         # make sure we're only dealing with ints
         if path is not None:
-            initial_state = self._load_program(path) 
+            initial_state = IntCodeProcessor.load_program(path) 
         self._initial_state = [int(value) for value in initial_state]
         self._memory = None
         self._instruction_pointer = None
@@ -69,7 +69,8 @@ class IntCodeProcessor:
         for index, value in enumerate(self._memory[start:end]):
             print(f'{index+start}: {value}')
 
-    def _load_program(self, path):
+    @classmethod
+    def load_program(cls, path):
         with open(path) as fp:
             return [x for x in fp.read().rstrip().split(',')]
 
