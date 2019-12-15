@@ -4,10 +4,11 @@ https://adventofcode.com/2019/day/8
 """
 from collections import Counter
 from itertools import dropwhile
+from utils import split_by_size
 
 def part1(pixels, pixel_width, pixel_height):
     """Output the answer to part 1 - """
-    layers = chunks(pixels, pixel_width * pixel_height)
+    layers = split_by_size(pixels, pixel_width * pixel_height)
     layer_counts = [Counter(layer) for layer in layers]
     layer_zero_counts = [counts['0'] for counts in layer_counts]
     min_layer_index = layer_zero_counts.index(min(layer_zero_counts))
@@ -18,7 +19,7 @@ def part2(pixels, pixel_width, pixel_height):
     """Output the answer to part 2 - """
 
     # Split the pixels into layers
-    layers = chunks(pixels, pixel_width * pixel_height)
+    layers = split_by_size(pixels, pixel_width * pixel_height)
 
     # Group the pixels into groups of pixels that are on top of each other when the layers are stacked
     pixel_stacks = list(zip(*layers))
@@ -30,7 +31,7 @@ def part2(pixels, pixel_width, pixel_height):
     block_pixels = [u'\u25a0' if pixel == '1' else u'\u25a1' for pixel in visible_pixels]
 
     # Group the pixels into rows
-    pixel_rows = chunks(block_pixels, pixel_width)
+    pixel_rows = split_by_size(block_pixels, pixel_width)
 
     # Join all the characters in each row into a single string
     joined_pixel_rows = [''.join(row) for row in pixel_rows]
@@ -49,13 +50,6 @@ def part1_test_input():
 def part2_test_input():
     """Returns the test data set from the description of part 2"""
     return '0222112222120000'
-
-def chunks(the_list, chunk_size):
-    return list(chunks_generator(the_list, chunk_size))
-
-def chunks_generator(the_list, chunk_size):
-    for i in range(0, len(the_list), chunk_size):
-        yield the_list[i:i+chunk_size]
 
 if __name__ == '__main__':
     part1(puzzle_input(), 25, 6)
