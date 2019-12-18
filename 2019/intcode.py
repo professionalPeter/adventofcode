@@ -52,16 +52,19 @@ class Command:
 
 class IntCodeProcessor:
     'An Int Code program processor'
-    def __init__(self, initial_state = [], path = None):
+    def __init__(self, initial_state = [], path = None, overrides = None):
         # make sure we're only dealing with ints
         if path is not None:
             initial_state = IntCodeProcessor.load_program(path) 
         self._initial_state = [int(value) for value in initial_state]
+            
+        if overrides is not None:
+            self._initial_state[:len(overrides)] = overrides
+
         self._memory = None
         self._instruction_pointer = None
         self._relative_base = None
         self._reset_execution()
-
     def dump_memory(self, start=None, end=None):
         start = start or self._instruction_pointer
         end = end or start + 15
@@ -266,6 +269,9 @@ if __name__ == '__main__':
     print(f'Less Than test when less than immediate mode: {processor.execute_program(7) == [1]}')
     print(f'Less Than test when not less than immediate mode: {processor.execute_program(8) == [0]}')
 
+
+    processor = IntCodeProcessor([99,99,99], overrides=[104,22])
+    print(f'Overrides are applied during execution: {processor.execute_program() == [22]}')
     processor = IntCodeProcessor([109, 3, 2101, 10, 0, 0, 4, 0, 99])
     print(f'Relative mode test: {processor.execute_program() == [20]}')
     program = [109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99]
@@ -290,4 +296,6 @@ MAke a better decision on where NEED_INPUT should be raised
 Consolidate the logic for adding the offset to the relative base
 Validate that input is all integers
 Fill in target component of info log lines
+Take away load_program since override bytes now exists?
+Should you be able to override on execution instead of init?
 """
