@@ -7,7 +7,7 @@ from string import ascii_lowercase
 from copy import deepcopy
 import logging
 
-logging.basicConfig(level=logging.WARN)
+#logging.basicConfig(level=logging.INFO)
 
 def part1(inputs = None):
     """Output the answer to part 1 - """
@@ -140,44 +140,62 @@ def find_key(key, starting_point, grid, state):
     logging.debug(f'Found key: {key} - {best_path}')
     return best_path, state
 
-def find_path_sequence(keys, starting_point, grid, state, owned=[]):
+def find_path_sequence(keys, starting_point, grid, state, failure_cache = {}, owned=''):
     # Base case - only one key to find
     if len(keys) == 1:
-        for key in keys:
-            logging.info(f'T: {owned + [key]}')
-            new_state = deepcopy(state)
-            key_path, new_state = find_key(key, starting_point, grid, new_state)
-            return [list(key_path.keys())]
-
-    successful_paths = []
-    for next_key in keys:
-        owned.append(next_key)
-        try:
-            logging.info(f'T: {owned}')
+        next_key = list(keys)[0]
+        logging.info(f'T: {next_key} O: {owned}')
+        
+        new_cache_value = set(owned)
+        existing_cache_value = failure_cache.get(next_key)
+        if existing_cache_value and new_cache_value <= existing_cache_value:
+            logging.info(f'failed via cache***: {existing_cache_value}')
+        else:
             new_state = deepcopy(state)
             key_path, new_state = find_key(next_key, starting_point, grid, new_state)
             if not key_path:
-                continue
-            #TODO: Does this incorrectly persist state for callers without the deepcopy above.
-            # Think about successive iterations of the loop
+                if not existing_cache_value or len(new_cache_value) > len(existing_cache_value):
+                    failure_cache[next_key] = new_cache_value
+        return [list(key_path.keys())]
+
+    successful_paths = []
+    for next_key in keys:
+        if len(owned) == 0: print(next_key)
+        logging.info(f'T: {next_key} O: {owned}')
+        
+        new_cache_value = set(owned)
+        existing_cache_value = failure_cache.get(next_key)
+        if existing_cache_value and new_cache_value <= existing_cache_value:
+            logging.info(f'failed via cache: {existing_cache_value}')
+            continue
+
+        new_state = deepcopy(state)
+        key_path, new_state = find_key(next_key, starting_point, grid, new_state)
+        if not key_path:
+            if not existing_cache_value or len(new_cache_value) > len(existing_cache_value):
+                failure_cache[next_key] = new_cache_value
+            continue
+
+        owned += next_key
+        try:
             new_state['unlocked_doors'].add(next_key.upper())
             new_state['owned_keys'].add(next_key)
             key_path = list(key_path.keys())
             rest_starting_point = key_path.pop()
             rest_keys = keys - set([next_key])
-            rest_paths = find_path_sequence(rest_keys, rest_starting_point, grid, new_state, owned)
+            rest_paths = find_path_sequence(rest_keys, rest_starting_point, grid, new_state, failure_cache, owned)
             if not rest_paths:
                 continue
             successful_paths += [key_path + path for path in rest_paths]
         finally:
-            owned.pop()
+            owned = owned[:-1]
     return successful_paths
 
 if __name__ == '__main__':
     part1()
     part2()
 
-    data = test_input2()
+    data = test_input3()
     grid = data.splitlines()
     keys = [k for row in grid for k in row if k in ascii_lowercase]
     home_point = [(x,y) for y, row in enumerate(grid) for x, element in enumerate(row) if element == START][0]
@@ -186,7 +204,7 @@ if __name__ == '__main__':
 
     results = find_path_sequence(set(keys), home_point, grid, {'owned_keys': set(), 'unlocked_doors': set()})
     lens = [len(l)-1 for l in results]
-    print(lens, min(lens))
+    print(f'Path Lens: {lens}', f'Min path len: {min(lens)}', f'find_key_calls: {find_key_call_count}', sep='\n')
 
     """
     # create the list of possible paths by determining the possible key order combinations
@@ -235,4 +253,6 @@ Can I somehow enforce that find_key, find_path, etc don't modify the state?
 x - Fail the path if you hit a key that you don't own. This will cut down the search space, since that path is necessarily covered in another permutation
 Get rid of the deep copy?
 Preprocess keys to find inaccessible keys without pathfinding
+make owned an ordered set instead of a string
+optimization? first find the legal key paths by faking ownership of the keys? find the minimal set of keys needed?
 """
