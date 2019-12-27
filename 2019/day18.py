@@ -6,6 +6,7 @@ from itertools import permutations
 from string import ascii_lowercase
 from copy import deepcopy
 import logging
+import unittest
 
 #logging.basicConfig(level=logging.INFO)
 
@@ -27,7 +28,7 @@ def test_input0():
     return """
 #########
 #b.A.@.a#
-#########"""[1:]
+#########""".lstrip()
 
 def test_input1():
     """Returns the test data set from the description of part 2"""
@@ -87,7 +88,9 @@ def grid_element_at(grid, x, y):
         return None
 
 def can_enter_location(grid_status, goal, state):
-    return grid_status == OPEN or grid_status in state['owned_keys'] or grid_status in state['unlocked_doors'] or grid_status == goal or grid_status == START
+    return grid_status == OPEN or grid_status in state['doors'] or grid_status == goal or grid_status == START
+    #return grid_status == OPEN or grid_status in state['owned_keys'] or grid_status in state['unlocked_doors'] or grid_status == goal or grid_status == START
+    #return grid_status == OPEN or grid_status in state['owned_keys'] or grid_status == goal or grid_status == START
 
 depth = 0
 
@@ -137,7 +140,7 @@ def find_key(key, starting_point, grid, state):
     if not paths:
         return None, state
     best_path = min(paths, key=len)
-    logging.debug(f'Found key: {key} - {best_path}')
+    logging.debug(f'Found key: {key} - {best_path} - requires: {[key for key in best_path.values() if key in state["doors"]]}')
     return best_path, state
 
 def find_path_sequence(keys, starting_point, grid, state, failure_cache = {}, owned=''):
@@ -191,22 +194,66 @@ def find_path_sequence(keys, starting_point, grid, state, failure_cache = {}, ow
             owned = owned[:-1]
     return successful_paths
 
+"""
+def solve(keys, starting_point, grid, state):
+    nodes = 2
+    for subset in combinations(keys, nodes):
+        for next_node in keys:
+            # EAFP here?
+            if next_node not in keys:
+                continue
+            state_without_next = subset - set([next_node))
+            for end_node in keys:
+                if end_node == next_node or end not in keys:
+                    cached_distance = state['dist_cache'][(end, frozenset(state_without_next)]
+                    try:
+                        dist_end_to_next = state.['adjacent_costs'][frozenset(next_node, end_node)]
+                    except 
+                        path = find_key(end_node, location_of(next_node), grid, state)
+                        if path:
+                            dist_end_to_next = len(path)
+                        else:
+                            dist_end_to_next = -1
+
+                    new_distance
+    for k in keys:
+        best_path, _ find_key(key, starting_point, grid, state):
+        if best_path:
+            state['adjacent_costs']
+    """
+
+def find_adjacency_costs(grid, keys, state):
+    for key0, key1 in combinations(keys, 2):
+        start_location = location_of(key0)
+        find_key(key1, start_location, grid, state)
+
+class TestDay18(unittest.TestCase):
+    simple_maze = """
+#########
+#@.a.A.b#
+#########""".lstrip()
+
+    def test_find_key(self):
+        self.assertTrue('FOO'.isupper())
+
 if __name__ == '__main__':
     part1()
     part2()
 
-    data = test_input3()
+    unittest.main()
+"""
+    data = test_input2()
     grid = data.splitlines()
     keys = [k for row in grid for k in row if k in ascii_lowercase]
     home_point = [(x,y) for y, row in enumerate(grid) for x, element in enumerate(row) if element == START][0]
     print('Starting at', home_point)
 
-
+    find_adjacency_costs(grid)
     results = find_path_sequence(set(keys), home_point, grid, {'owned_keys': set(), 'unlocked_doors': set()})
     lens = [len(l)-1 for l in results]
     print(f'Path Lens: {lens}', f'Min path len: {min(lens)}', f'find_key_calls: {find_key_call_count}', sep='\n')
-
     """
+"""
     # create the list of possible paths by determining the possible key order combinations
     print(f'Generating candidate paths for {keys}')
     candidate_paths = list(permutations(keys))
@@ -255,4 +302,5 @@ Get rid of the deep copy?
 Preprocess keys to find inaccessible keys without pathfinding
 make owned an ordered set instead of a string
 optimization? first find the legal key paths by faking ownership of the keys? find the minimal set of keys needed?
+optimization? Can i make it faster by not finding shortest paths initially, but only the required order?
 """
