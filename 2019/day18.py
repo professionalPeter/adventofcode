@@ -2,8 +2,8 @@
 
 https://adventofcode.com/2019/day/18
 """
-from itertools import permutations
-from string import ascii_lowercase
+from itertools import combinations, permutations
+from string import ascii_lowercase, ascii_uppercase
 from copy import deepcopy
 import logging
 import unittest
@@ -78,35 +78,58 @@ WALL = '#'
 OPEN = '.'
 START = '@'
 KEYS = set(ascii_lowercase)
+DOORS = set(ascii_uppercase)
 DELTAS = {NORTH: (0,1), SOUTH: (0,-1), WEST: (-1,0), EAST: (1,0)}
 OPPOSITE_DIRECTION = {NORTH: SOUTH, SOUTH: NORTH, WEST: EAST, EAST: WEST}
 
-def grid_element_at(grid, x, y):
-    try:
-        return grid[y][x]
-    except IndexError:
-        return None
+class Maze:
+    def __init__(self, ascii_maze):
+        self.maze = ascii_maze.lstrip().splitlines()
+        self.points_of_interest = {item:(x,y) for y, row in enumerate(self.maze) for x, item in enumerate(row) if item == START or item in KEYS}
 
-def can_enter_location(grid_status, goal, state):
-    return grid_status == OPEN or grid_status in state['doors'] or grid_status == goal or grid_status == START
-    #return grid_status == OPEN or grid_status in state['owned_keys'] or grid_status in state['unlocked_doors'] or grid_status == goal or grid_status == START
-    #return grid_status == OPEN or grid_status in state['owned_keys'] or grid_status == goal or grid_status == START
+    def location_of(self, item):
+        return self.points_of_interest.get(item)
+
+    def item_at(self, location):
+        try:
+            return self.maze[location[1]][location[0]]
+        except IndexError:
+            return None
+
+    @property
+    def keys(self):
+        return set(self.points_of_interest) & KEYS
+
+class Path:
+    def __init__(self, path):
+        self.path = path
+
+    def __len__(self):
+        return len(self.path)
+
+    @property
+    def doorsPassed(self):
+        return [door for door in self.path.values() if door in DOORS]
+
+    @property
+    def keysPassed(self):
+        return [key for key in self.path.values() if key in KEYS]
 
 depth = 0
 
-def find_paths(x, y, grid, goal, state = None, path = None):
+def find_paths(x, y, maze, goal, path = None):
     global depth
     depth += 1
     path = path or {}
     successful_paths = []
 
     path_status = path.get((x, y))
-    grid_status = grid_element_at(grid, x, y)
+    grid_status = maze.item_at((x, y))
     logging.debug(f'{" " * depth}{(x, y)}: grid_status: {grid_status} path_status: {path_status}')
 
     # Base of the recursion - if we couldn't take the step (either because we hit a wall or already traversed the location),
     # then record the successful path and start unwinding
-    if not can_enter_location(grid_status, goal, state) or path_status:
+    if grid_status == WALL or path_status:
         depth -= 1
         return successful_paths
 
@@ -122,7 +145,7 @@ def find_paths(x, y, grid, goal, state = None, path = None):
         for next_direction in [NORTH, EAST, SOUTH, WEST]:
             new_x = x + DELTAS[next_direction][0]
             new_y = y + DELTAS[next_direction][1]
-            successful_paths += find_paths(new_x,new_y, grid, goal, state, path)
+            successful_paths += find_paths(new_x,new_y, maze, goal, path)
 
     # unmark that we've traversed this location, so that the callers are free to traverse it again if desired
     # del rather than set it to False so that if the same location was somehow inserted later, it would be properly ordered
@@ -131,116 +154,132 @@ def find_paths(x, y, grid, goal, state = None, path = None):
     return successful_paths
 
 find_key_call_count = 0
-def find_key(key, starting_point, grid, state):
-    logging.debug(f'Finding key: {key}')
+def find_best_path_between(item0, item1, maze):
+    logging.debug(f'Finding "{item1}"')
     global find_key_call_count
     find_key_call_count += 1
 
-    paths = find_paths(starting_point[0], starting_point[1], grid, key, state)
+    starting_point = maze.location_of(item0)
+    paths = find_paths(starting_point[0], starting_point[1], maze, item1)
     if not paths:
-        return None, state
+        return None
     best_path = min(paths, key=len)
-    logging.debug(f'Found key: {key} - {best_path} - requires: {[key for key in best_path.values() if key in state["doors"]]}')
-    return best_path, state
+    del best_path[starting_point] # drop the starting point, because we want the path to just include the subsequent steps
+    path_object = Path(best_path)
+    logging.debug(f'Found "{item1}" - {path_object.path} - requires: {path_object.doorsPassed}')
 
-def find_path_sequence(keys, starting_point, grid, state, failure_cache = {}, owned=''):
-    # Base case - only one key to find
-    if len(keys) == 1:
-        next_key = list(keys)[0]
-        logging.info(f'T: {next_key} O: {owned}')
-        
-        new_cache_value = set(owned)
-        existing_cache_value = failure_cache.get(next_key)
-        if existing_cache_value and new_cache_value <= existing_cache_value:
-            logging.info(f'failed via cache***: {existing_cache_value}')
-        else:
-            new_state = deepcopy(state)
-            key_path, new_state = find_key(next_key, starting_point, grid, new_state)
-            if not key_path:
-                if not existing_cache_value or len(new_cache_value) > len(existing_cache_value):
-                    failure_cache[next_key] = new_cache_value
-        return [list(key_path.keys())]
-
-    successful_paths = []
-    for next_key in keys:
-        if len(owned) == 0: print(next_key)
-        logging.info(f'T: {next_key} O: {owned}')
-        
-        new_cache_value = set(owned)
-        existing_cache_value = failure_cache.get(next_key)
-        if existing_cache_value and new_cache_value <= existing_cache_value:
-            logging.info(f'failed via cache: {existing_cache_value}')
-            continue
-
-        new_state = deepcopy(state)
-        key_path, new_state = find_key(next_key, starting_point, grid, new_state)
-        if not key_path:
-            if not existing_cache_value or len(new_cache_value) > len(existing_cache_value):
-                failure_cache[next_key] = new_cache_value
-            continue
-
-        owned += next_key
-        try:
-            new_state['unlocked_doors'].add(next_key.upper())
-            new_state['owned_keys'].add(next_key)
-            key_path = list(key_path.keys())
-            rest_starting_point = key_path.pop()
-            rest_keys = keys - set([next_key])
-            rest_paths = find_path_sequence(rest_keys, rest_starting_point, grid, new_state, failure_cache, owned)
-            if not rest_paths:
-                continue
-            successful_paths += [key_path + path for path in rest_paths]
-        finally:
-            owned = owned[:-1]
-    return successful_paths
-
-"""
-def solve(keys, starting_point, grid, state):
-    nodes = 2
-    for subset in combinations(keys, nodes):
-        for next_node in keys:
-            # EAFP here?
-            if next_node not in keys:
-                continue
-            state_without_next = subset - set([next_node))
-            for end_node in keys:
-                if end_node == next_node or end not in keys:
-                    cached_distance = state['dist_cache'][(end, frozenset(state_without_next)]
-                    try:
-                        dist_end_to_next = state.['adjacent_costs'][frozenset(next_node, end_node)]
-                    except 
-                        path = find_key(end_node, location_of(next_node), grid, state)
-                        if path:
-                            dist_end_to_next = len(path)
-                        else:
-                            dist_end_to_next = -1
-
-                    new_distance
-    for k in keys:
-        best_path, _ find_key(key, starting_point, grid, state):
-        if best_path:
-            state['adjacent_costs']
-    """
-
-def find_adjacency_costs(grid, keys, state):
-    for key0, key1 in combinations(keys, 2):
-        start_location = location_of(key0)
-        find_key(key1, start_location, grid, state)
+    return path_object
 
 class TestDay18(unittest.TestCase):
-    simple_maze = """
+
+    def test_find_key_returns_minimal_path_len(self):
+        maze = Maze("""
 #########
-#@.a.A.b#
-#########""".lstrip()
+#.......#
+#@.....a#
+#.......#
+#########""")
+        path = find_best_path_between(START, 'a', maze)
+        self.assertEqual(len(path), 6)
 
-    def test_find_key(self):
-        self.assertTrue('FOO'.isupper())
+    def test_find_key_returns_path_through_key(self):
+        maze = Maze("""
+#########
+#@..b..a#
+#########""")
+        path = find_best_path_between(START, 'a', maze)
+        self.assertEqual(len(path), 6)
 
+    def test_find_key_returns_path_through_door(self):
+        maze = Maze("""
+#########
+#@..A..a#
+#########""")
+        path = find_best_path_between(START, 'a', maze)
+        self.assertEqual(len(path), 6)
+
+    def test_find_key_returns_doors_encountered(self):
+        maze = Maze("""
+#########
+#@..A..a#
+#########""")
+        path = find_best_path_between(START, 'a', maze)
+        self.assertEqual(path.doorsPassed, ['A'])
+
+    def test_find_key_returns_other_keys_encountered(self):
+        maze = Maze("""
+#########
+#@..b..a#
+#########""")
+        path = find_best_path_between(START, 'a', maze)
+        self.assertCountEqual(path.keysPassed, ['a', 'b'])
+
+    def test_cost_for_set_with_size(self):
+        maze = Maze("""
+#########
+#...b...#
+#@.....a#
+#....c..#
+#########""")
+        costs = cost_for_set_with_size(1, 'abc', maze)
+        self.assertEqual(costs, {make_cache_key('a'): 6, 
+                                 make_cache_key('b'): 4,
+                                 make_cache_key('c'): 5})
+
+def make_cache_key(keys):
+    return (frozenset(keys), keys[-1])
+
+cache = {}
+def cost_for_set_with_size(size, keys, maze, edge_costs):
+    keys = set(keys)
+    last_sets = [set(c) for c in combinations(keys, size)]
+    for last_set in last_sets:
+        next_keys = keys - last_set
+        for next_key in next_keys:
+            for last_key in last_set:
+                last_set_minus_last_key = last_set - set(last_key)
+                print(f'g({next_key}, {last_set}) = c({next_key}, {last_key}) + g({last_key}, {last_set_minus_last_key})')
+                #cache[next_key, frozenset(last_set)] = adjacency_matrix[last_key, next_key] + cache[last_key, frozenset(last_set_minus_last_key)]
+                #find_best_path_between(last_key, next_key, maze)
+
+    return {(frozenset(key), key):len(find_best_path_between(START, key, maze)) for key in keys}
+
+def calc_initial_costs(maze):
+    costs = {}
+    for key in maze.keys:
+        path = find_best_path_between(START, key, maze)
+        if path.doorsPassed or (set(path.keysPassed) - set(key)):
+            continue
+        costs[key, frozenset()] = len(path)
+    return costs
+
+def make_adjacency_matrix(maze):
+    return {frozenset(pair):find_best_path_between(pair[0], pair[1], maze) for pair in permutations(maze.keys, 2)}
+
+def calc_incremental_costs(maze, current_costs_map, edge_costs):
+    all_keys = set(maze.keys)
+    new_costs = {}
+    for keys, cost in current_costs_map:
+        last_key, rest = keys
+        next_keys = all_keys - set(last_key) - rest
+        for next_key in next_keys:
+            START HERE
+            new_costs[???] = edge_costs[set(last_key, next_key)] + cost
 if __name__ == '__main__':
     part1()
     part2()
 
-    unittest.main()
+    import time
+    maze = Maze(test_input3())
+    print('Building adjacency matrix')
+    #make_adjacency_matrix(maze)
+    print('Calculating cost to initial keys')
+    x = calc_initial_costs(maze)
+    print(x)
+    print('done')
+    #unittest.main()
+
+    
 """
     data = test_input2()
     grid = data.splitlines()
