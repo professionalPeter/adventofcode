@@ -7,6 +7,7 @@ from string import ascii_lowercase, ascii_uppercase
 from copy import deepcopy
 import logging
 import unittest
+from pprint import pprint
 
 #logging.basicConfig(level=logging.INFO)
 
@@ -213,18 +214,83 @@ class TestDay18(unittest.TestCase):
 #########""")
         path = find_best_path_between(START, 'a', maze)
         self.assertCountEqual(path.keysPassed, ['a', 'b'])
-
+    """
     def test_cost_for_set_with_size(self):
-        maze = Maze("""
+        maze = Maze(
 #########
 #...b...#
 #@.....a#
 #....c..#
-#########""")
+#########)
         costs = cost_for_set_with_size(1, 'abc', maze)
         self.assertEqual(costs, {make_cache_key('a'): 6, 
                                  make_cache_key('b'): 4,
                                  make_cache_key('c'): 5})
+    """
+
+    def test_calc_incremental_costs_adds_next_set_of_keys(self):
+        initial_costs_map = {('1', frozenset()):0}
+
+        edge_costs = {frozenset('21'):1,
+                      frozenset('31'):15,
+                      frozenset('41'):6,
+                      frozenset('32'):7,
+                      frozenset('42'):3,
+                      frozenset('34'):8}
+        maze_keys = '234'
+
+        # The resulting dict should contain a key for each maze_key in a tuple with an empty set
+        # and the value should be the edge cost from 1 to the maze_key
+        result = calc_incremental_costs(maze_keys, initial_costs_map, edge_costs)
+        self.assertDictEqual(result, {('2', frozenset('1')):1,
+                                      ('3', frozenset('1')):15,
+                                      ('4', frozenset('1')):6})
+
+        result = calc_incremental_costs(maze_keys, result, edge_costs)
+
+        # The resulting dict should contain a key for each item from the current_costs_map 
+        # combined with each element from maze_keys, with the value set to 
+        # value from the current_costs_map plus the value from edge costs from the last key to the next key
+        self.assertDictEqual(result, {('3', frozenset('12')):8,
+                                      ('4', frozenset('12')):4,
+                                      ('2', frozenset('13')):22,
+                                      ('4', frozenset('13')):23,
+                                      ('2', frozenset('14')):9,
+                                      ('3', frozenset('14')):14})
+
+        # The resulting dict should contain a key for each unique set created when combining 
+        # the elements of a key from 'result' into a single set (e.g. ('3', frozenset('2')) produces the set('2', '3')
+        # then put into a tuple with each item from maze_keys not in the resulting set
+        # (e.g. ('4', frozenset('2', '3')))
+        # The value for each key should be the minimum value resulting from adding each value from 'result'
+        # to the value from edge_costs from the last key to the next key
+        result = calc_incremental_costs(maze_keys, result, edge_costs)
+        self.assertDictEqual(result, {('4', frozenset('123')):16,
+                                      ('3', frozenset('124')):12,
+                                      ('2', frozenset('134')):21})
+
+
+    def test_calc_incremental_costs_excludes_paths_with_locked_doors(self):
+        edge_costs = {frozenset('21'):1,
+                      frozenset('31'):15,
+                      frozenset('41'):6,
+                      frozenset('32'):7,
+                      frozenset('42'):3,
+                      frozenset('34'):8}
+        doorsPassed = START
+
+        maze_keys = '234'
+
+        # The resulting dict should contain a key for each maze_key in a tuple with an empty set
+        # and the value should be the edge cost from 1 to the maze_key
+        result = calc_incremental_costs(maze_keys, initial_costs_map, edge_costs)
+        self.assertDictEqual(result, {('2', frozenset('1')):1,
+                                      ('3', frozenset('1')):15,
+                                      ('4', frozenset('1')):6})
+
+        
+
+
 
 def make_cache_key(keys):
     return (frozenset(keys), keys[-1])
@@ -256,28 +322,40 @@ def calc_initial_costs(maze):
 def make_adjacency_matrix(maze):
     return {frozenset(pair):find_best_path_between(pair[0], pair[1], maze) for pair in permutations(maze.keys, 2)}
 
-def calc_incremental_costs(maze, current_costs_map, edge_costs):
-    all_keys = set(maze.keys)
+def calc_incremental_costs(all_keys, current_costs_map, edge_costs):
+    all_keys = frozenset(all_keys)
     new_costs = {}
-    for keys, cost in current_costs_map:
+    for keys, cost_of_current_keys in current_costs_map.items():
         last_key, rest = keys
-        next_keys = all_keys - set(last_key) - rest
+        current_keys = frozenset(set(last_key) | rest)
+        next_keys = all_keys - current_keys
         for next_key in next_keys:
-            START HERE
-            new_costs[???] = edge_costs[set(last_key, next_key)] + cost
+            #if the new edge does not require keys we don't have
+            cost_to_next_maze_key = edge_costs[frozenset([last_key, next_key])] + cost_of_current_keys
+            costs_dict_key = (next_key, frozenset(current_keys))
+            existing_cost = new_costs.get(costs_dict_key)
+            new_costs[costs_dict_key] = cost_to_next_maze_key if existing_cost is None else min(existing_cost, cost_to_next_maze_key)
+    return new_costs
+
 if __name__ == '__main__':
     part1()
     part2()
 
+    """
     import time
     maze = Maze(test_input3())
     print('Building adjacency matrix')
-    #make_adjacency_matrix(maze)
+    edge_costs = make_adjacency_matrix(maze)
+    pprint({k:len(v) for k,v in edge_costs.items()})
     print('Calculating cost to initial keys')
     x = calc_initial_costs(maze)
-    print(x)
+    pprint(x)
+    print('Calculating incrementatal costs')
+    x = calc_incremental_costs(maze.keys, x, edge_costs)
+    pprint(x)
     print('done')
-    #unittest.main()
+    """ 
+    unittest.main()
 
     
 """
@@ -342,4 +420,5 @@ Preprocess keys to find inaccessible keys without pathfinding
 make owned an ordered set instead of a string
 optimization? first find the legal key paths by faking ownership of the keys? find the minimal set of keys needed?
 optimization? Can i make it faster by not finding shortest paths initially, but only the required order?
+Should be able to get rid of the need for the calc_initial_costs by seeding the current_cost_map with g(START, set())
 """
