@@ -11,7 +11,7 @@ class Input:
     def parse_ints(self):
         return [int(i) for i in self._data.split()]
     def parse_lines(self):
-        return self._data.split('\n')
+        return self._data.splitlines()
     def parse_records(self):
         return [record.split('\n') for record in self._data.split('\n\n')]
 
