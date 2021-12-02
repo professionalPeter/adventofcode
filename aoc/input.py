@@ -10,4 +10,8 @@ class Input:
             return cls(file.read())
     def parse_ints(self):
         return [int(i) for i in self._data.split()]
+    def parse_lines(self):
+        return self._data.split('\n')
+    def parse_records(self):
+        return [record.split('\n') for record in self._data.split('\n\n')]
 
