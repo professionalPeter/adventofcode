@@ -15,8 +15,7 @@ def part2(inputs = None):
 
 def puzzle_input():
     """Returns the official input for the puzzle"""
-    with open('dayDAYinput.txt') as file:
-        return file.read()
+    return Input.from_file('dayDAYinput.txt')
 
 def test_input1():
     """Returns the test data set from the description of part 1"""
@@ -29,3 +28,4 @@ def test_input2():
 if __name__ == '__main__':
     part1(test_input1().parse_lines())
     part2(test_input2().parse_lines())
+
