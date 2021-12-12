@@ -5,59 +5,47 @@ https://adventofcode.com/2021/day/12
 
 from aoc import Input
 from collections import defaultdict
-from copy import deepcopy
 #import pudb; pu.db
 
-def find_paths(path, nodes, visits_allowed):
-    initial = path[-1]
-    if initial == 'end':
-        final_path = ','.join(path)
-        #print(final_path)
-        return set([final_path])
-    path_set = set()
-    for node in nodes[initial]:
-        if node.islower():
-            if visits_allowed[node] > 0:
-                visits_allowed[node] -= 1
+def find_paths(path, nodes, revisit_allowed):
+    last_node = path[-1]
+    if last_node == 'end':
+        #print(','.join(path))
+        return 1
+    path_count = 0
+    for node in nodes[last_node]:
+        if node == 'start':
+            continue
+        elif node.islower() and node in path:
+            if revisit_allowed:
+                path_count += find_paths(path + [node], nodes, False)
             else:
                 continue
-        path_set = path_set.union(find_paths(path + [node], nodes, visits_allowed))
-        if node.islower():
-            visits_allowed[node] += 1
-    return path_set
+        else:
+            path_count += find_paths(path + [node], nodes, revisit_allowed)
+    return path_count
 
 def part1(inputs = None):
     """Output the answer to part 1 - """
     nodes = defaultdict(set)
     for line in inputs:
-        components = line.split('-')
-        nodes[components[0]].add(components[1])
-        nodes[components[1]].add(components[0])
+        a,b = line.split('-')
+        nodes[a].add(b)
+        nodes[b].add(a)
 
-    visits_allowed = {node:1 for node in nodes if node.islower()}
-    visits_allowed['start'] = 0
-    visits_allowed['end'] = 1
-    path_set = find_paths(['start'], nodes, visits_allowed)
-    print(f'Part 1 answer: {len(path_set)}')
+    path_count = find_paths(['start'], nodes, False)
+    print(f'Part 1 answer: {path_count}')
 
 def part2(inputs = None):
     """Output the answer to part 2 - """
     nodes = defaultdict(set)
     for line in inputs:
-        components = line.split('-')
-        nodes[components[0]].add(components[1])
-        nodes[components[1]].add(components[0])
+        a,b = line.split('-')
+        nodes[a].add(b)
+        nodes[b].add(a)
 
-    lower_nodes = [node for node in nodes if node.islower() and node != 'start' and node != 'end']
-
-    path_set = set()
-    for special_node in lower_nodes:
-        visits_allowed = {node:1 for node in lower_nodes}
-        visits_allowed[special_node] = 2
-        visits_allowed['start'] = 0
-        visits_allowed['end'] = 1
-        path_set = path_set.union(find_paths(['start'], nodes, visits_allowed))
-    print(f'Part 2 answer: {len(path_set)}')
+    path_count = find_paths(['start'], nodes, True)
+    print(f'Part 2 answer: {path_count}')
 
 def puzzle_input():
     """Returns the official input for the puzzle"""
