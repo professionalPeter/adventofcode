@@ -13,5 +13,5 @@ class Input:
     def parse_lines(self):
         return self._data.splitlines()
     def parse_records(self):
-        return [record.split('\n') for record in self._data.split('\n\n')]
+        return [record.splitlines() for record in self._data.split('\n\n')]
 
