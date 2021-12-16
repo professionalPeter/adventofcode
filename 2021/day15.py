@@ -4,7 +4,8 @@ https://adventofcode.com/2021/day/15
 """
 
 from aoc import Input
-from itertools import product
+from collections import namedtuple
+import heapq
 
 def min_cost(grid, target, memo):
     if target[0] == 0 and target[1] == 0:
@@ -19,67 +20,44 @@ def min_cost(grid, target, memo):
     memo[target] = cost
     return cost
 
-def get_location_cost(grid, target):
-    #todo memo these too
-    x = target[0] % 10
-    y = target[1] % 10
+def get_cost(grid, target):
+    width = len(grid[0])
+    height = len(grid)
+    x = target[0] % width
+    y = target[1] % height
     cost = grid[y][x]
-    assert(target[0] // 10 < 5 and target[1] // 10 < 5) # line below only handles a 5x5 grid
-    cost += (target[0] // 10) + (target[1] // 10)
+    assert(target[0] // width < 5 and target[1] // height < 5) # line below only handles a 5x5 grid
+    cost += (target[0] // width) + (target[1] // width)
     if cost > 9:
         cost -= 9 
     return cost
 
-def min_cost_with_start(grid, start, target, memo):
-    if start == target:
-        return get_location_cost(grid, start)
-    if cost := memo.get(target):
-        #print(f'used memo {target}')
-        return cost
-    #print(f'{target}')
-    min_x = (start[0] // 10) * 10
-    min_y = (start[1] // 10) * 10
-    neighbors = [(target[0]-1, target[1]), (target[0], target[1]-1)]
-    neighbor_costs = {neighbor:min_cost_with_start(grid, start, neighbor, memo) for neighbor in neighbors if neighbor[0] >= min_x and neighbor[1] >= min_y}
-    min_neighbor_cost = min(neighbor_costs.values()) if len(neighbor_costs) > 0 else 0
-    cost = get_location_cost(grid, target) + min_neighbor_cost
-    memo[(start,target)] = cost
-    return cost
+PathCost = namedtuple("PathCost", "cost x y")
 
-def min_costs_through_tile(grid, tile_x, tile_y, memo):
-    # min cost of top edge
-    tile_start_x = tile_x * 10
-    tile_start_y = tile_y * 10
-    tile_end_x = tile_start_x + len(grid[0]) - 1
-    tile_end_y = tile_start_y + len(grid) - 1
-        
-    entries = [(tile_start_x, tile_start_y + y) for y in range(len(grid))] + [(tile_start_x + x, tile_start_y) for x in range(len(grid[0]))]
-    exits = [(tile_end_x, tile_start_y + y) for y in range(len(grid))] + [(tile_start_x + x, tile_end_y) for x in range(len(grid[0]))]
-    print(entries)
-    print(exits)
-    paths = list(product(entries, exits))
-    print(len(paths))
-    for start, end in paths:
-        min_cost_with_start(grid, start, end, memo)
+def get_adjacent(x,y, x_range, y_range):
+    #use combinations?
+    return [coord for coord in
+        [          (x, y-1),
+         (x-1, y),             (x+1, y),
+                   (x, y+1)]
+        if coord[0] in x_range and coord[1] in y_range]
 
-def min_cost_adv(grid, target, memo):
-    if target[0] == 0 and target[1] == 0:
-        return 0
-    if cost := memo.get(target):
-        #print(f'used memo {target}')
-        return cost
-    #print(f'{target}')
-    neighbors = [(target[0]-1, target[1]), (target[0], target[1]-1)]
-    neighbor_costs = {neighbor:min_cost_adv(grid, neighbor, memo) for neighbor in neighbors if neighbor[0] >= 0 and neighbor[1] >= 0}
-    x = target[0] % 10
-    y = target[1] % 10
-    cost_delta = (target[0] // 10) + (target[1] // 10)
-    cost = grid[y][x] + cost_delta
-    if cost > 9:
-        cost -= 9 
-    cost += min(neighbor_costs.values())
-    memo[target] = cost
-    return cost
+def min_cost_adv(grid, target, tiles):
+    travelled = set()
+    sorted_next_steps = [PathCost(0, 0, 0)]
+    
+    x_range = range(len(grid[0]) * tiles)
+    y_range = range(len(grid) * tiles)
+
+    while True:
+        step = heapq.heappop(sorted_next_steps)
+        if step.x == target[0] and step.y == target[1]:
+            return step.cost
+        neighbors = get_adjacent(step.x, step.y, x_range, y_range)
+        for neighbor in neighbors:
+            if neighbor not in travelled:
+                travelled.add(neighbor)
+                heapq.heappush(sorted_next_steps, PathCost(step.cost + get_cost(grid, neighbor), neighbor[0], neighbor[1]))
 
 def part1(inputs = None):
     """Output the answer to part 1 - """
@@ -93,7 +71,7 @@ def part2(grid):
     """Output the answer to part 1 - """
     tiles = 5
     target = (len(grid[0])*tiles - 1, len(grid)*tiles - 1)
-    least_cost_path = min_cost_adv(grid, target, {})
+    least_cost_path = min_cost_adv(grid, target, tiles)
     print(f'Part 2 answer: {least_cost_path}')
 
 def puzzle_input():
@@ -114,8 +92,7 @@ def test_input():
 2311944581""")
 
 if __name__ == '__main__':
-    grid = [list(map(int, line)) for line in test_input().parse_lines()]
     part1(puzzle_input().parse_lines())
+    grid = [list(map(int, line)) for line in puzzle_input().parse_lines()]
     part2(grid)
-    min_costs_through_tile(grid, 0, 0, {})
 
