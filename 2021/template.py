@@ -17,15 +17,11 @@ def puzzle_input():
     """Returns the official input for the puzzle"""
     return Input.from_file('dayDAYinput.txt')
 
-def test_input1():
+def test_input():
     """Returns the test data set from the description of part 1"""
     return Input.from_data("""""")
 
-def test_input2():
-    """Returns the test data set from the description of part 2"""
-    return Input.from_data("""""")
-
 if __name__ == '__main__':
-    part1(test_input1().parse_lines())
-    part2(test_input2().parse_lines())
+    part1(test_input().parse_lines())
+    part2(test_input().parse_lines())
 
