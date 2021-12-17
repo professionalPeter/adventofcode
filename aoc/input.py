@@ -8,6 +8,8 @@ class Input:
     def from_file(cls, filepath):
         with open(filepath) as file:
             return cls(file.read())
+    def get_data(self):
+        return self._data.strip()
     def parse_ints(self, sep=None):
         return [int(i) for i in self._data.split(sep)]
     def parse_lines(self):
