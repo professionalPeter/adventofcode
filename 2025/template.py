@@ -1,6 +1,6 @@
-"""Solutions for Day DAY of Advent of Code 2021
+"""Solutions for Day DAY of Advent of Code 2025
 
-https://adventofcode.com/2021/day/DAY
+https://adventofcode.com/2025/day/DAY
 """
 
 from aoc import Input
